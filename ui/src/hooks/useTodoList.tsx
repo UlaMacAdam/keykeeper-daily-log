@@ -393,34 +393,118 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
       const textMap = getTextMap();
       const loadedTodos: Todo[] = [];
 
+      // Collect all handles first
+      const todoData: Array<{
+        index: number;
+        idHandle: string;
+        completedHandle: string;
+        timestamp: number;
+      }> = [];
+
       for (let i = 0; i < Number(count); i++) {
         try {
           const [encryptedId, encryptedCompleted, timestamp] = await contract.getTodo(address, i);
           const idHandle = typeof encryptedId === "string" ? encryptedId : ethers.hexlify(encryptedId);
           const completedHandle = typeof encryptedCompleted === "string" ? encryptedCompleted : ethers.hexlify(encryptedCompleted);
 
-          // Decrypt
-          const { id, completed } = await decryptTodo(
-            idHandle.toLowerCase(),
-            completedHandle.toLowerCase(),
-            contractAddress,
-            i
-          );
-
-          // Get text from mapping
-          const text = textMap[idHandle.toLowerCase()] || `Todo #${i + 1}`;
-
-          loadedTodos.push({
-            id: `todo-${i}`,
-            text,
-            encryptedId: idHandle.toLowerCase(),
-            encryptedCompleted: completedHandle.toLowerCase(),
-            completed,
-            timestamp: Number(timestamp),
+          todoData.push({
             index: i,
+            idHandle: idHandle.toLowerCase(),
+            completedHandle: completedHandle.toLowerCase(),
+            timestamp: Number(timestamp),
           });
         } catch (error) {
-          console.error(`Error loading todo ${i}:`, error);
+          console.error(`Error fetching todo ${i}:`, error);
+        }
+      }
+
+      // Batch decrypt all handles with a single signature
+      if (todoData.length > 0) {
+        // Generate keypair once
+        const keypair = (fhevmInstance as any).generateKeypair?.() || {
+          publicKey: new Uint8Array(32).fill(0),
+          privateKey: new Uint8Array(32).fill(0),
+        };
+
+        // Create EIP712 signature once
+        const contractAddresses = [contractAddress as `0x${string}`];
+        const startTimestamp = Math.floor(Date.now() / 1000).toString();
+        const durationDays = "10";
+
+        const eip712 = (fhevmInstance as any).createEIP712?.(
+          keypair.publicKey,
+          contractAddresses,
+          startTimestamp,
+          durationDays
+        ) || {
+          domain: { name: "FHEVM", version: "1", chainId, verifyingContract: contractAddresses[0] },
+          types: { UserDecryptRequestVerification: [] },
+          message: {},
+        };
+
+        // Sign once for all decryptions
+        const signature = await ethersSigner.signTypedData(
+          eip712.domain,
+          { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
+          eip712.message
+        );
+
+        const signatureForDecrypt = chainId === 31337 ? signature.replace("0x", "") : signature;
+
+        // Collect all handles for batch decryption
+        const handleContractPairs: Array<{ handle: string; contractAddress: `0x${string}` }> = [];
+        for (const todo of todoData) {
+          if (todo.idHandle && todo.idHandle.length > 0) {
+            handleContractPairs.push({
+              handle: todo.idHandle,
+              contractAddress: contractAddress as `0x${string}`,
+            });
+          }
+          if (todo.completedHandle && todo.completedHandle.length > 0) {
+            handleContractPairs.push({
+              handle: todo.completedHandle,
+              contractAddress: contractAddress as `0x${string}`,
+            });
+          }
+        }
+
+        // Batch decrypt all handles at once
+        const decryptedResult = await (fhevmInstance as any).userDecrypt(
+          handleContractPairs,
+          keypair.privateKey,
+          keypair.publicKey,
+          signatureForDecrypt,
+          contractAddresses,
+          address as `0x${string}`,
+          startTimestamp,
+          durationDays
+        );
+
+        // Process decrypted results
+        for (const todo of todoData) {
+          try {
+            const id = todo.idHandle && todo.idHandle.length > 0
+              ? Number(decryptedResult[todo.idHandle] || 0)
+              : 0;
+            const completed = todo.completedHandle && todo.completedHandle.length > 0
+              ? Number(decryptedResult[todo.completedHandle] || 0) === 1
+              : false;
+
+            // Get text from mapping
+            const text = textMap[todo.idHandle] || `Todo #${todo.index + 1}`;
+
+            loadedTodos.push({
+              id: `todo-${todo.index}`,
+              text,
+              encryptedId: todo.idHandle,
+              encryptedCompleted: todo.completedHandle,
+              completed,
+              timestamp: todo.timestamp,
+              index: todo.index,
+            });
+          } catch (error) {
+            console.error(`Error processing todo ${todo.index}:`, error);
+          }
         }
       }
 
@@ -433,7 +517,7 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
     } finally {
       setIsLoading(false);
     }
-  }, [contractAddress, ethersProvider, address, fhevmInstance, ethersSigner, getTextMap, decryptTodo]);
+  }, [contractAddress, ethersProvider, address, fhevmInstance, ethersSigner, getTextMap, chainId]);
 
   useEffect(() => {
     if (contractAddress && ethersProvider && address && fhevmInstance && ethersSigner) {
