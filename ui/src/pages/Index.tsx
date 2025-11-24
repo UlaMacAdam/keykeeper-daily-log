@@ -9,7 +9,17 @@ import { CheckSquare, Shield, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTodoList } from '@/hooks/useTodoList';
 
-const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
+// Get contract address from environment variable or use default localhost address
+const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+
+// Debug: Log environment variables (remove in production)
+if (import.meta.env.DEV) {
+  console.log('Environment variables:', {
+    VITE_CONTRACT_ADDRESS: import.meta.env.VITE_CONTRACT_ADDRESS,
+    CONTRACT_ADDRESS_USED: CONTRACT_ADDRESS,
+    MODE: import.meta.env.MODE,
+  });
+}
 
 const Index = () => {
   const { address, isConnected } = useAccount();
