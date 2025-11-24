@@ -520,6 +520,7 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
       const signatureForDecrypt = chainId === 31337 ? signature.replace("0x", "") : signature;
 
       // Batch decrypt all handles at once
+      console.log("[useTodoList] Decrypting handles:", handleContractPairs.map(h => h.handle));
       const decryptedResult = await (fhevmInstance as any).userDecrypt(
         handleContractPairs,
         keypair.privateKey,
@@ -531,9 +532,12 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
         durationDays
       );
 
+      console.log("[useTodoList] Decryption result:", decryptedResult);
+      console.log("[useTodoList] Decryption result keys:", Object.keys(decryptedResult));
+
       // Update todos with decrypted values
       const textMap = getTextMap();
-      console.log("[useTodoList] Decryption result keys:", Object.keys(decryptedResult));
+      console.log("[useTodoList] Text map:", textMap);
       console.log("[useTodoList] Text map keys:", Object.keys(textMap));
       
       const updatedTodos = todos.map(todo => {
