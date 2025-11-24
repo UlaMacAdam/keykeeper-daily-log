@@ -597,10 +597,27 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
 
         // Get text from mapping (should exist from when todo was created)
         // Try multiple handle formats to find the text
-        const textFromMap = textMap[idHandle] 
+        // Also try to convert handle to array string format (for old data compatibility)
+        let textFromMap = textMap[idHandle] 
           || textMap[todo.encryptedId] 
           || textMap[todo.encryptedId.toLowerCase()]
           || textMap[todo.encryptedId.toUpperCase()];
+        
+        // If not found, try array string format (for old incorrectly saved data)
+        if (!textFromMap && todo.encryptedId.startsWith('0x')) {
+          try {
+            // Convert hex string to bytes array string format
+            const hexWithoutPrefix = todo.encryptedId.slice(2);
+            const bytes: number[] = [];
+            for (let i = 0; i < hexWithoutPrefix.length; i += 2) {
+              bytes.push(parseInt(hexWithoutPrefix.substr(i, 2), 16));
+            }
+            const arrayStringKey = bytes.join(',');
+            textFromMap = textMap[arrayStringKey];
+          } catch (e) {
+            // Ignore conversion errors
+          }
+        }
         
         // If text not found in map, we need to use the decrypted ID to look it up
         // But since we don't have a reverse mapping, we'll show a generic text
