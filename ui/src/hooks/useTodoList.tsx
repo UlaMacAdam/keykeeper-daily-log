@@ -108,9 +108,21 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
 
   // Get text mapping from local storage
   const getTextMap = useCallback((): Record<string, string> => {
-    if (typeof window === "undefined" || !address) return {};
-    const stored = localStorage.getItem(`${TEXT_MAP_KEY}_${address}`);
-    return stored ? JSON.parse(stored) : {};
+    if (typeof window === "undefined" || !address) {
+      console.log("[useTodoList] getTextMap: no window or address", { hasWindow: typeof window !== "undefined", address });
+      return {};
+    }
+    const storageKey = `${TEXT_MAP_KEY}_${address}`;
+    const stored = localStorage.getItem(storageKey);
+    const map = stored ? JSON.parse(stored) : {};
+    console.log("[useTodoList] getTextMap:", {
+      address,
+      storageKey,
+      stored,
+      map,
+      mapKeys: Object.keys(map),
+    });
+    return map;
   }, [address]);
 
   // Save text mapping to local storage
@@ -201,9 +213,22 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
         const handleValue: unknown = encryptedId.handles[0];
         const handle = String(handleValue || '').toLowerCase();
         
+        console.log("[useTodoList] Saving text mapping:", {
+          handle,
+          handleValue,
+          text,
+          address,
+          textMapBefore: { ...textMap },
+        });
+        
         if (handle && handle.length > 0) {
           textMap[handle] = text;
           saveTextMap(textMap);
+          console.log("[useTodoList] Text mapping saved:", {
+            handle,
+            text,
+            textMapAfter: { ...textMap },
+          });
         } else {
           console.warn("[useTodoList] Could not save text mapping: invalid handle", handleValue);
         }
