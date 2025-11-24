@@ -163,6 +163,11 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
         );
         encryptedCompletedInput.add32(0);
         const encryptedCompleted = await encryptedCompletedInput.encrypt();
+        
+        // Validate encrypted result
+        if (!encryptedCompleted || !encryptedCompleted.handles || !Array.isArray(encryptedCompleted.handles) || encryptedCompleted.handles.length === 0) {
+          throw new Error("Encryption failed: Invalid completion handle returned");
+        }
 
         setMessage("Submitting to blockchain...");
 
@@ -183,9 +188,21 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
 
         // Save text mapping
         const textMap = getTextMap();
-        const handle = encryptedId.handles[0].toLowerCase();
-        textMap[handle] = text;
-        saveTextMap(textMap);
+        // Ensure handle is a string and convert to lowercase
+        const handleValue = encryptedId.handles[0];
+        let handle: string;
+        if (typeof handleValue === 'string') {
+          handle = handleValue.toLowerCase();
+        } else if (handleValue && typeof handleValue === 'object' && 'toString' in handleValue) {
+          handle = handleValue.toString().toLowerCase();
+        } else {
+          handle = String(handleValue || '').toLowerCase();
+        }
+        
+        if (handle && handle.length > 0) {
+          textMap[handle] = text;
+          saveTextMap(textMap);
+        }
 
         setMessage("Todo created successfully!");
         
