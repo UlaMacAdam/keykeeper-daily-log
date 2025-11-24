@@ -23,6 +23,7 @@ interface Todo {
   completed: boolean; // Decrypted completion status
   timestamp: number;
   index: number; // Contract index
+  isDecrypted?: boolean; // Flag to indicate if this todo has been decrypted
 }
 
 interface UseTodoListState {
@@ -618,6 +619,7 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
           ...todo,
           text,
           completed,
+          isDecrypted: true, // Mark as decrypted
         };
       });
 

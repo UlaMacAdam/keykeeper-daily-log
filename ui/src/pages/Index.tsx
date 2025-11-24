@@ -53,11 +53,13 @@ const Index = () => {
     }
   };
 
-  // Check if todos are decrypted (if any todo has completed status that's not false, it's decrypted)
-  // Or if text doesn't start with "Encrypted Todo"
-  const isDecrypted = todos.length > 0 && todos.some(t => {
-    // If text is from local storage mapping, it's decrypted
-    // If text starts with "Encrypted Todo", it's not decrypted
+  // Check if todos are decrypted
+  // A todo is decrypted if it has isDecrypted flag set to true
+  // Or if text doesn't start with "Encrypted Todo" (from local storage)
+  const isDecrypted = todos.length > 0 && todos.every(t => {
+    // Check if explicitly marked as decrypted
+    if (t.isDecrypted) return true;
+    // Or if text doesn't start with "Encrypted Todo" (means it's from local storage)
     return t.text && !t.text.startsWith('Encrypted Todo');
   });
 
