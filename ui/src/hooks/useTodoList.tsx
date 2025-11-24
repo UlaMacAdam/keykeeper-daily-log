@@ -405,7 +405,18 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
         await tx.wait();
         setMessage("Todo toggled successfully!");
 
-        // Reload todos after a delay
+        // Update the todo in local state immediately (optimistic update)
+        setTodos(prevTodos => prevTodos.map(todo => {
+          if (todo.index === contractIndex) {
+            return {
+              ...todo,
+              completed: !todo.completed, // Toggle the completed status
+            };
+          }
+          return todo;
+        }));
+
+        // Reload todos after a delay to sync with contract
         setTimeout(() => {
           loadTodos();
         }, 2000);
