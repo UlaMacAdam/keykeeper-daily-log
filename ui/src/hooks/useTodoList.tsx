@@ -29,10 +29,12 @@ interface UseTodoListState {
   contractAddress: string | undefined;
   todos: Todo[];
   isLoading: boolean;
+  isDecrypting: boolean;
   message: string | undefined;
   createTodo: (text: string) => Promise<void>;
   toggleTodo: (index: number) => Promise<void>;
   loadTodos: () => Promise<void>;
+  decryptTodos: () => Promise<void>;
 }
 
 // Local storage key for text mapping
@@ -46,6 +48,7 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
 
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDecrypting, setIsDecrypting] = useState(false);
   const [message, setMessage] = useState<string | undefined>(undefined);
   const [ethersSigner, setEthersSigner] = useState<ethers.JsonRpcSigner | undefined>(undefined);
   const [ethersProvider, setEthersProvider] = useState<ethers.JsonRpcProvider | undefined>(undefined);
@@ -517,22 +520,136 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
     } finally {
       setIsLoading(false);
     }
-  }, [contractAddress, ethersProvider, address, fhevmInstance, ethersSigner, getTextMap, chainId]);
+  }, [contractAddress, ethersProvider, address, fhevmInstance, ethersSigner, getTextMap]);
+
+  const decryptTodos = useCallback(async () => {
+    if (!contractAddress || !ethersProvider || !address || !fhevmInstance || !ethersSigner) {
+      setMessage("Missing requirements for decryption");
+      return;
+    }
+
+    if (todos.length === 0) {
+      setMessage("No todos to decrypt");
+      return;
+    }
+
+    try {
+      setIsDecrypting(true);
+      setMessage("Decrypting todos...");
+
+      // Collect all handles for batch decryption
+      const handleContractPairs: Array<{ handle: string; contractAddress: `0x${string}` }> = [];
+      for (const todo of todos) {
+        if (todo.encryptedId && todo.encryptedId.length > 0) {
+          handleContractPairs.push({
+            handle: todo.encryptedId,
+            contractAddress: contractAddress as `0x${string}`,
+          });
+        }
+        if (todo.encryptedCompleted && todo.encryptedCompleted.length > 0) {
+          handleContractPairs.push({
+            handle: todo.encryptedCompleted,
+            contractAddress: contractAddress as `0x${string}`,
+          });
+        }
+      }
+
+      if (handleContractPairs.length === 0) {
+        throw new Error("No handles to decrypt");
+      }
+
+      // Generate keypair once
+      const keypair = (fhevmInstance as any).generateKeypair?.() || {
+        publicKey: new Uint8Array(32).fill(0),
+        privateKey: new Uint8Array(32).fill(0),
+      };
+
+      // Create EIP712 signature once
+      const contractAddresses = [contractAddress as `0x${string}`];
+      const startTimestamp = Math.floor(Date.now() / 1000).toString();
+      const durationDays = "10";
+
+      const eip712 = (fhevmInstance as any).createEIP712?.(
+        keypair.publicKey,
+        contractAddresses,
+        startTimestamp,
+        durationDays
+      ) || {
+        domain: { name: "FHEVM", version: "1", chainId, verifyingContract: contractAddresses[0] },
+        types: { UserDecryptRequestVerification: [] },
+        message: {},
+      };
+
+      // Sign once for all decryptions
+      const signature = await ethersSigner.signTypedData(
+        eip712.domain,
+        { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
+        eip712.message
+      );
+
+      const signatureForDecrypt = chainId === 31337 ? signature.replace("0x", "") : signature;
+
+      // Batch decrypt all handles at once
+      const decryptedResult = await (fhevmInstance as any).userDecrypt(
+        handleContractPairs,
+        keypair.privateKey,
+        keypair.publicKey,
+        signatureForDecrypt,
+        contractAddresses,
+        address as `0x${string}`,
+        startTimestamp,
+        durationDays
+      );
+
+      // Update todos with decrypted values
+      const textMap = getTextMap();
+      const updatedTodos = todos.map(todo => {
+        const id = todo.encryptedId && todo.encryptedId.length > 0
+          ? Number(decryptedResult[todo.encryptedId] || 0)
+          : 0;
+        const completed = todo.encryptedCompleted && todo.encryptedCompleted.length > 0
+          ? Number(decryptedResult[todo.encryptedCompleted] || 0) === 1
+          : false;
+
+        // Get text from mapping
+        const text = textMap[todo.encryptedId] || todo.text;
+
+        return {
+          ...todo,
+          text,
+          completed,
+        };
+      });
+
+      setTodos(updatedTodos);
+      setMessage("Todos decrypted successfully!");
+    } catch (error: any) {
+      const errorMessage = error.reason || error.message || String(error);
+      setMessage(`Error decrypting todos: ${errorMessage}`);
+      console.error("[useTodoList] Error decrypting todos:", error);
+      throw error;
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [contractAddress, ethersProvider, address, fhevmInstance, ethersSigner, todos, chainId, getTextMap]);
 
   useEffect(() => {
     if (contractAddress && ethersProvider && address && fhevmInstance && ethersSigner) {
       loadTodos();
     }
-  }, [contractAddress, ethersProvider, address, fhevmInstance, ethersSigner, loadTodos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractAddress, ethersProvider, address, fhevmInstance, ethersSigner]);
 
   return {
     contractAddress,
     todos,
     isLoading,
+    isDecrypting,
     message,
     createTodo,
     toggleTodo,
     loadTodos,
+    decryptTodos,
   };
 }
 

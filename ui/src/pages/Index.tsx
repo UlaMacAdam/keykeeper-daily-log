@@ -23,7 +23,7 @@ if (import.meta.env.DEV) {
 
 const Index = () => {
   const { address, isConnected } = useAccount();
-  const { todos, isLoading, message, createTodo, toggleTodo, loadTodos } = useTodoList(CONTRACT_ADDRESS);
+  const { todos, isLoading, isDecrypting, message, createTodo, toggleTodo, loadTodos, decryptTodos } = useTodoList(CONTRACT_ADDRESS);
 
   const handleAddTodo = async (category: 'sleep' | 'exercise' | 'tasks', text: string) => {
     if (!isConnected) {
