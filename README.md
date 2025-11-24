@@ -5,7 +5,7 @@ A privacy-first encrypted to-do list application built with FHEVM (Fully Homomor
 ## 🚀 Live Demo
 
 - **Live Application**: [https://keykeeper-daily-log.vercel.app/](https://keykeeper-daily-log.vercel.app/)
-- **Demo Video**: [https://github.com/fufu666-max/keykeeper-daily-log/blob/main/keykeeper-daily-log.mp4](https://github.com/fufu666-max/keykeeper-daily-log/blob/main/keykeeper-daily-log.mp4)
+- **Demo Video**: [https://github.com/UlaMacAdam/keykeeper-daily-log/blob/main/keykeeper-daily-log.mp4](https://github.com/UlaMacAdam/keykeeper-daily-log/blob/main/keykeeper-daily-log.mp4)
 
 ## Features
 
