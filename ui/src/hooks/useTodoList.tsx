@@ -541,8 +541,20 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
           ? Number(decryptedResult[todo.encryptedCompleted] || 0) === 1
           : false;
 
-        // Get text from mapping
-        const text = textMap[todo.encryptedId] || todo.text;
+        // Get text from mapping (should exist from when todo was created)
+        // If not found, keep the current text but it should be from local storage
+        const textFromMap = textMap[todo.encryptedId];
+        const text = textFromMap || (todo.text.startsWith('Encrypted Todo') ? `Todo #${todo.index + 1}` : todo.text);
+
+        console.log("[useTodoList] Decrypting todo:", {
+          index: todo.index,
+          encryptedId: todo.encryptedId,
+          textFromMap,
+          currentText: todo.text,
+          finalText: text,
+          completed,
+          id,
+        });
 
         return {
           ...todo,
@@ -552,6 +564,7 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
         };
       });
 
+      console.log("[useTodoList] Updated todos after decryption:", updatedTodos);
       setTodos(updatedTodos);
       setMessage("Todos decrypted successfully!");
     } catch (error: any) {
