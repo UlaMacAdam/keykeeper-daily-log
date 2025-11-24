@@ -222,64 +222,13 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
     [contractAddress, ethersSigner, fhevmInstance, address, ethersProvider, hashTextToUint32, getTextMap, saveTextMap]
   );
 
-  const toggleTodo = useCallback(
-    async (contractIndex: number) => {
-      if (!contractAddress || !ethersSigner || !fhevmInstance || !address) {
-        setMessage("Missing requirements for toggling todo");
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setMessage("Toggling todo...");
-
-        // Find todo by contract index (not array index, as todos may be sorted)
-        const todo = todos.find(t => t.index === contractIndex);
-        if (!todo) {
-          throw new Error(`Todo not found at contract index ${contractIndex}`);
-        }
-
-        // Encrypt new completion status (toggle: 1 if was 0, 0 if was 1)
-        const newCompleted = todo.completed ? 0 : 1;
-        const encryptedCompletedInput = fhevmInstance.createEncryptedInput(
-          contractAddress as `0x${string}`,
-          address as `0x${string}`
-        );
-        encryptedCompletedInput.add32(newCompleted);
-        const encryptedCompleted = await encryptedCompletedInput.encrypt();
-
-        const contract = new ethers.Contract(contractAddress, PrivateTodoListABI, ethersSigner);
-
-        const tx = await contract.toggleTodo(
-          contractIndex,
-          encryptedCompleted.handles[0],
-          encryptedCompleted.inputProof,
-          {
-            gasLimit: 5000000,
-          }
-        );
-
-        await tx.wait();
-        setMessage("Todo toggled successfully!");
-
-        // Reload todos after a delay
-        setTimeout(() => {
-          loadTodos();
-        }, 2000);
-      } catch (error: any) {
-        const errorMessage = error.reason || error.message || String(error);
-        setMessage(`Error: ${errorMessage}`);
-        console.error("[useTodoList] Error toggling todo:", error);
-        throw error;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [contractAddress, ethersSigner, fhevmInstance, address]
-  );
-
   const decryptTodo = useCallback(
-    async (encryptedId: string, encryptedCompleted: string, contractAddress: string, index: number): Promise<{ id: number; completed: boolean }> => {
+    async (
+      encryptedId: string, 
+      encryptedCompleted: string, 
+      contractAddress: string, 
+      index: number
+    ): Promise<{ id: number; completed: boolean }> => {
       if (!fhevmInstance || !ethersSigner || !address) {
         throw new Error("FHEVM not initialized");
       }
@@ -314,11 +263,24 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
 
       const signatureForDecrypt = chainId === 31337 ? signature.replace("0x", "") : signature;
 
-      // Decrypt both values
-      const handleContractPairs = [
-        { handle: encryptedId, contractAddress: contractAddress as `0x${string}` },
-        { handle: encryptedCompleted, contractAddress: contractAddress as `0x${string}` },
-      ];
+      // Build handle-contract pairs (only include non-empty handles)
+      const handleContractPairs: Array<{ handle: string; contractAddress: `0x${string}` }> = [];
+      if (encryptedId && encryptedId.length > 0) {
+        handleContractPairs.push({ 
+          handle: encryptedId, 
+          contractAddress: contractAddress as `0x${string}` 
+        });
+      }
+      if (encryptedCompleted && encryptedCompleted.length > 0) {
+        handleContractPairs.push({ 
+          handle: encryptedCompleted, 
+          contractAddress: contractAddress as `0x${string}` 
+        });
+      }
+
+      if (handleContractPairs.length === 0) {
+        throw new Error("No handles to decrypt");
+      }
 
       const decryptedResult = await (fhevmInstance as any).userDecrypt(
         handleContractPairs,
@@ -331,12 +293,85 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
         durationDays
       );
 
-      const id = Number(decryptedResult[encryptedId] || 0);
-      const completed = Number(decryptedResult[encryptedCompleted] || 0) === 1;
+      const id = encryptedId && encryptedId.length > 0 
+        ? Number(decryptedResult[encryptedId] || 0) 
+        : 0;
+      const completed = encryptedCompleted && encryptedCompleted.length > 0
+        ? Number(decryptedResult[encryptedCompleted] || 0) === 1
+        : false;
 
       return { id, completed };
     },
     [fhevmInstance, ethersSigner, address, chainId]
+  );
+
+  const toggleTodo = useCallback(
+    async (contractIndex: number) => {
+      if (!contractAddress || !ethersSigner || !fhevmInstance || !address || !ethersProvider) {
+        setMessage("Missing requirements for toggling todo");
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setMessage("Fetching current todo status...");
+
+        // Get current todo from contract (don't rely on todos array state)
+        const contract = new ethers.Contract(contractAddress, PrivateTodoListABI, ethersProvider);
+        const [encryptedId, currentEncryptedCompleted, timestamp] = await contract.getTodo(address, contractIndex);
+        
+        const completedHandle = typeof currentEncryptedCompleted === "string" 
+          ? currentEncryptedCompleted 
+          : ethers.hexlify(currentEncryptedCompleted);
+
+        // Decrypt current completion status
+        setMessage("Decrypting current status...");
+        const { completed: currentCompleted } = await decryptTodo(
+          "", // We don't need to decrypt ID for toggle
+          completedHandle.toLowerCase(),
+          contractAddress,
+          contractIndex
+        );
+
+        // Encrypt new completion status (toggle: 1 if was 0, 0 if was 1)
+        const newCompleted = currentCompleted ? 0 : 1;
+        setMessage("Encrypting new status...");
+        const encryptedCompletedInput = fhevmInstance.createEncryptedInput(
+          contractAddress as `0x${string}`,
+          address as `0x${string}`
+        );
+        encryptedCompletedInput.add32(newCompleted);
+        const newEncryptedCompleted = await encryptedCompletedInput.encrypt();
+
+        const contractWithSigner = new ethers.Contract(contractAddress, PrivateTodoListABI, ethersSigner);
+
+        setMessage("Submitting to blockchain...");
+        const tx = await contractWithSigner.toggleTodo(
+          contractIndex,
+          newEncryptedCompleted.handles[0],
+          newEncryptedCompleted.inputProof,
+          {
+            gasLimit: 5000000,
+          }
+        );
+
+        await tx.wait();
+        setMessage("Todo toggled successfully!");
+
+        // Reload todos after a delay
+        setTimeout(() => {
+          loadTodos();
+        }, 2000);
+      } catch (error: any) {
+        const errorMessage = error.reason || error.message || String(error);
+        setMessage(`Error: ${errorMessage}`);
+        console.error("[useTodoList] Error toggling todo:", error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [contractAddress, ethersSigner, fhevmInstance, address, ethersProvider, decryptTodo]
   );
 
   const loadTodos = useCallback(async () => {
