@@ -209,19 +209,37 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
 
         // Save text mapping
         const textMap = getTextMap();
-        // Ensure handle is a string and convert to lowercase
+        // Ensure handle is a proper hex string and convert to lowercase
         const handleValue: unknown = encryptedId.handles[0];
-        const handle = String(handleValue || '').toLowerCase();
+        let handle: string;
+        
+        if (typeof handleValue === 'string') {
+          handle = handleValue.toLowerCase();
+        } else if (handleValue instanceof Uint8Array || Array.isArray(handleValue)) {
+          // Convert Uint8Array or array to hex string
+          const bytes = handleValue instanceof Uint8Array ? Array.from(handleValue) : handleValue;
+          handle = '0x' + bytes.map(b => b.toString(16).padStart(2, '0')).join('').toLowerCase();
+        } else {
+          // Try to convert to string first, then to hex if needed
+          const str = String(handleValue || '');
+          if (str.startsWith('0x')) {
+            handle = str.toLowerCase();
+          } else {
+            // If it's already a hex string without 0x, add it
+            handle = '0x' + str.toLowerCase();
+          }
+        }
         
         console.log("[useTodoList] Saving text mapping:", {
           handle,
           handleValue,
+          handleValueType: typeof handleValue,
           text,
           address,
           textMapBefore: { ...textMap },
         });
         
-        if (handle && handle.length > 0) {
+        if (handle && handle.length > 0 && handle.startsWith('0x')) {
           textMap[handle] = text;
           saveTextMap(textMap);
           console.log("[useTodoList] Text mapping saved:", {
@@ -230,7 +248,7 @@ export function useTodoList(contractAddress: string | undefined): UseTodoListSta
             textMapAfter: { ...textMap },
           });
         } else {
-          console.warn("[useTodoList] Could not save text mapping: invalid handle", handleValue);
+          console.warn("[useTodoList] Could not save text mapping: invalid handle", handleValue, handle);
         }
 
         setMessage("Todo created successfully!");
