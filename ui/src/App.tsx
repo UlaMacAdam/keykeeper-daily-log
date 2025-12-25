@@ -8,6 +8,7 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { config } from './config/wagmi';
 import '@rainbow-me/rainbowkit/styles.css';
 import { InMemoryStorageProvider } from "@/hooks/useInMemoryStorage";
+import { PageTransition } from "@/components/PageTransition";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -29,8 +30,8 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="*" element={<NotFound />} />
+                <Route path="/" element={<PageTransition><Index /></PageTransition>} />
+                <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
               </Routes>
             </BrowserRouter>
           </TooltipProvider>

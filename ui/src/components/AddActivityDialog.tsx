@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 
 interface AddActivityDialogProps {
   onAddActivity: (category: 'sleep' | 'exercise' | 'tasks', label: string) => void;
@@ -25,9 +25,15 @@ export const AddActivityDialog = ({ onAddActivity }: AddActivityDialogProps) => 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Todo
+        <Button
+          variant="outline"
+          size="sm"
+          className="group relative overflow-hidden hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 hover:scale-105 hover:border-primary/50"
+        >
+          <div className="absolute inset-0 bg-gradient-primary opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
+          <Plus className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110" />
+          <span className="relative z-10">Add Todo</span>
+          <Sparkles className="w-3 h-3 ml-2 opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
